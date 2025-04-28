@@ -27,8 +27,28 @@ def test_parsing_filenames():
 def test_retention():
     ''' dev test '''
     filenames = [
+        'db_20150428_180000.sqlite3.xz', # 10 years <=
+        'db_20160428_180000.sqlite3.xz',
+        'db_20170428_180000.sqlite3.xz',
+        'db_20180428_180000.sqlite3.xz',
+        'db_20190428_180000.sqlite3.xz', # <=
+        'db_20191028_180000.sqlite3.xz',
+        'db_20200428_180000.sqlite3.xz', # <=
+        'db_20201028_180000.sqlite3.xz',
+        'db_20210428_180000.sqlite3.xz',
+        'db_20211028_180000.sqlite3.xz',
+        'db_20220428_180000.sqlite3.xz',
+        'db_20221028_180000.sqlite3.xz', # 2.5 years
+        'db_20230428_180000.sqlite3.xz', # 2 years
+        'db_20231028_180000.sqlite3.xz', # 1.5 years
+        'db_20240428_180000.sqlite3.xz', # 1 year
+        'db_20241028_180000.sqlite3.xz', # 6 months
+        'db_20240128_180000.sqlite3.xz', # 3 months
+        'db_20250328_180000.sqlite3.xz',
         'db_20250428_180000.sqlite3.xz'
     ]
+    # reverse the order.
+    filenames.sort(reverse=True)
 
     #prune.main()
     schedule = {
@@ -46,16 +66,19 @@ def test_retention():
 
     all_times = {b['time'].strftime(ISO_FORMAT) for b in all_backups}
     times_to_keep = {b['time'].strftime(ISO_FORMAT) for b in backups_to_keep}
-    times_to_prune = sorted(list(all_times - times_to_keep))
+    times_to_prune = all_times - times_to_keep
 
     assert backups_to_keep is not None
     assert len(backups_to_keep) > 0
 
-    expected = [
-        '2025-04-28 18:00:00'
+    expected_to_remove = [
+        '2015-04-28 18:00:00',
+        '2019-04-28 18:00:00',
+        '2020-04-28 18:00:00'
     ]
 
-    print(f'to prune: {times_to_prune}')
-    print(f'to keep: {times_to_keep}')
+    print(f'to prune: {sorted(times_to_prune)}')
+    print(f'to keep: {sorted(times_to_keep)}')
 
-    assert times_to_keep == set(expected)
+    # assert times_to_keep == set(expected_to_keep)
+    assert times_to_prune == set(expected_to_remove)
