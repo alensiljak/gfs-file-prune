@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
-By Gemini
+Backup Pruner Script
+This script prunes backup files based on a retention schedule.
+It keeps the most recent backups for specified time periods (hourly, daily, weekly, etc.)
 """
 
 import os
