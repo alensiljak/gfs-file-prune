@@ -5,7 +5,7 @@ By Gemini
 import os
 import re
 import argparse
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta
 
 # --- Configuration ---
 
@@ -26,7 +26,7 @@ TIMESTAMP_FORMAT = '%Y%m%d_%H%M%S'
 # that have backups. It does NOT mean keeping 7 backups from the last 24 hours * 7 days.
 # Set a value to 0 or None to disable keeping backups for that period type.
 
-KEEP_HOURLY  = 3   # Keep the last N hourly backups
+KEEP_HOURLY  = 3    # Keep the last N hourly backups
 KEEP_DAILY   = 7    # Keep the last N daily backups
 KEEP_WEEKLY  = 4    # Keep the last N weekly backups
 KEEP_MONTHLY = 12   # Keep the last N monthly backups
@@ -38,25 +38,25 @@ KEEP_YEARLY  = 10   # Keep the last N yearly backups
 
 def get_period_start(dt, period):
     """Calculates the start datetime for a given period containing dt."""
-    if period == 'hourly':
+    if period == 'hour':
         return dt.replace(minute=0, second=0, microsecond=0)
-    elif period == 'daily':
+    elif period == 'day':
         return dt.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif period == 'weekly':
+    elif period == 'week':
         # Start of the week (Monday)
         start_of_day = dt.replace(hour=0, minute=0, second=0, microsecond=0)
         return start_of_day - timedelta(days=start_of_day.weekday())
-    elif period == 'monthly':
+    elif period == 'month':
         return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    elif period == 'quarterly':
+    elif period == 'quarter':
         start_of_month = dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         quarter_month = ((start_of_month.month - 1) // 3) * 3 + 1
         return start_of_month.replace(month=quarter_month)
-    elif period == 'halfyearly':
+    elif period == 'halfyear':
         start_of_month = dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         halfyear_month = 1 if start_of_month.month <= 6 else 7
         return start_of_month.replace(month=halfyear_month)
-    elif period == 'yearly':
+    elif period == 'year':
         return dt.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
     else:
         raise ValueError(f"Unknown period: {period}")
@@ -93,37 +93,42 @@ def parse_backup_files(backup_dir, pattern, time_format):
     print(f"Found {len(backups)} backup files matching the pattern.")
     return backups
 
-def apply_retention_policy(backups, schedule):
-    """Applies the retention policy and returns a set of backup dicts to keep."""
+def apply_retention_policy(backups, schedule) -> set | list[dict]:
+    '''
+       Applies the retention policy and returns a set of backup dicts to keep.
+    '''
     if not backups:
         return set()
 
     to_keep = set()
-    kept_markers = {
-        'hourly': set(), 'daily': set(), 'weekly': set(),
-        'monthly': set(), 'quarterly': set(), 'halfyearly': set(), 'yearly': set()
+    kept_markers: dict = {
+        'hour': set(), 'day': set(), 'week': set(),
+        'month': set(), 'quarter': set(), 'halfyear': set(), 'year': set()
     }
     period_limits = {
-        'hourly': schedule.get('hourly', 0) or 0,
-        'daily': schedule.get('daily', 0) or 0,
-        'weekly': schedule.get('weekly', 0) or 0,
-        'monthly': schedule.get('monthly', 0) or 0,
-        'quarterly': schedule.get('quarterly', 0) or 0,
-        'halfyearly': schedule.get('halfyearly', 0) or 0,
-        'yearly': schedule.get('yearly', 0) or 0,
+        'hour': schedule.get('hourly', 0) or 0,
+        'day': schedule.get('daily', 0) or 0,
+        'week': schedule.get('weekly', 0) or 0,
+        'month': schedule.get('monthly', 0) or 0,
+        'quarter': schedule.get('quarterly', 0) or 0,
+        'halfyear': schedule.get('halfyearly', 0) or 0,
+        'year': schedule.get('yearly', 0) or 0,
     }
 
     # Always keep the newest backup
     newest_backup = backups[0]
     newest_backup_tuple = tuple(newest_backup.items()) # Use tuple for set compatibility
     to_keep.add(newest_backup_tuple)
-    print(f"Always keeping the newest backup: {os.path.basename(newest_backup['path'])} ({newest_backup['time']})")
+    latest_path = os.path.basename(newest_backup['path'])
+    print(f"Always keeping the newest backup: {latest_path} ({newest_backup['time']})")
 
     # Update markers based on the newest backup
-    for period in kept_markers:
+    for period_tuple in kept_markers.items():
+        period = period_tuple[0]
         if period_limits[period] > 0:
             period_start = get_period_start(newest_backup['time'], period)
             kept_markers[period].add(period_start)
+    # print(kept_markers)
 
     # Iterate through the rest of the backups (newest to oldest)
     for backup in backups[1:]:
