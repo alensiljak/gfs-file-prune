@@ -96,10 +96,10 @@ def parse_filenames(
     return backups
 
 
-def parse_backup_files(backup_dir, pattern, time_format) -> list | None:
+def parse_backup_files(backup_dir, pattern, time_format) -> list[dict] | None:
     """
     Scans the directory, parses filenames,
-    and returns a sorted list of (path, datetime)
+    and returns a sorted list of {path, datetime}
     """
     print(f"Scanning directory: {backup_dir}")
     try:
