@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 # --- Configuration ---
 
 # Directory containing the backup files
-current_dir = os.path.dirname(os.path.realpath(__file__))
+# current_dir = os.path.dirname(os.path.realpath(__file__))
+current_dir = os.getcwd()
 BACKUP_DIR = current_dir  # <<<--- IMPORTANT: SET THIS PATH
 
 # Regex pattern to find backup files and capture the timestamp
@@ -167,7 +168,6 @@ def apply_retention_policy(backups, schedule) -> set | list[dict]:
     # Iterate through the rest of the backups (newest to oldest)
     for backup in backups[1:]:
         backup_time = backup["time"]
-        # keep_this_one = False
         backup_tuple = tuple(backup.items())  # Use tuple for set compatibility
 
         # Check against each period rule
@@ -182,7 +182,6 @@ def apply_retention_policy(backups, schedule) -> set | list[dict]:
                 ):
                     to_keep.add(backup_tuple)
                     kept_markers[period].add(period_start)
-                    # keep_this_one = True
                     # print(f"  - Keeping {os.path.basename(backup['path'])} for {period} rule ({len(kept_markers[period])}/{limit})")
                     # No need to check shorter periods if a longer one keeps it
                     # break # Removed break: A backup might satisfy multiple rules, let it fill slots if needed
