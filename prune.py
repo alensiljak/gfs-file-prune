@@ -2,7 +2,11 @@
 """
 Backup Pruner Script
 This script prunes backup files based on a retention schedule.
-It keeps the most recent backups for specified time periods (hourly, daily, weekly, etc.)
+It keeps the most recent backups for specified time periods (hourly, daily, weekly, etc.).
+
+Logic:
+"hourly backup" = 1 (latest) backup for any given hour. All others within that hour are discarded.
+"daily backup" = 1 backup for any given day, etc.
 """
 
 import os
@@ -30,13 +34,16 @@ TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 # that have backups. It does NOT mean keeping 7 backups from the last 24 hours * 7 days.
 # Set a value to 0 or None to disable keeping backups for that period type.
 
-KEEP_HOURLY = 3  # Keep the last N hourly backups
-KEEP_DAILY = 7  # Keep the last N daily backups
-KEEP_WEEKLY = 4  # Keep the last N weekly backups
-KEEP_MONTHLY = 12  # Keep the last N monthly backups
-KEEP_QUARTERLY = 8  # Keep the last N quarterly backups (4 per year * 2 years)
-KEEP_HALFYEARLY = 4  # Keep the last N half-yearly backups (2 per year * 2 years)
-KEEP_YEARLY = 10  # Keep the last N yearly backups
+KEEP_HOURLY = 5  # Keep the last N hourly backups
+KEEP_DAILY = 30  # Keep the last N daily backups
+KEEP_WEEKLY = 50  # Keep the last N weekly backups
+KEEP_MONTHLY = 24  # Keep the last N monthly backups
+KEEP_QUARTERLY = 12  # Keep the last N quarterly backups (4 per year * 2 years)
+KEEP_HALFYEARLY = 14  # Keep the last N half-yearly backups (2 per year * 2 years)
+KEEP_YEARLY = 20  # Keep the last N yearly backups
+
+# Set this from outside the script, to perform the policy on any list of filenames.
+FILENAMES: list[str] | None = None
 
 # --- Helper Functions ---
 
@@ -67,82 +74,89 @@ def get_period_start(dt, period):
         raise ValueError(f"Unknown period: {period}")
 
 
+def print_markers(markers):
+    ''' Display markers in a readable format '''
+    for key in markers:
+        print(f"{key} ({len(markers[key])}):")
+        for item in sorted(markers[key]):
+            print(item)
+
 # --- Main Logic ---
 
-class Policy:
+
+def apply_retention_policy(backups, schedule) -> set | list[dict]:
     '''
-    Encapsulates retention policy.
+    Applies the retention policy and returns a set of backup dicts to keep.
     '''
-    def apply_retention_policy(self, backups, schedule) -> set | list[dict]:
-        '''
-        Applies the retention policy and returns a set of backup dicts to keep.
-        '''
-        if not backups:
-            return set()
+    if not backups:
+        return set()
 
-        to_keep = set()
-        kept_markers: dict = {
-            "hour": set(),
-            "day": set(),
-            "week": set(),
-            "month": set(),
-            "quarter": set(),
-            "halfyear": set(),
-            "year": set(),
-        }
-        period_limits = {
-            "hour": schedule.get("hourly", 0) or 0,
-            "day": schedule.get("daily", 0) or 0,
-            "week": schedule.get("weekly", 0) or 0,
-            "month": schedule.get("monthly", 0) or 0,
-            "quarter": schedule.get("quarterly", 0) or 0,
-            "halfyear": schedule.get("halfyearly", 0) or 0,
-            "year": schedule.get("yearly", 0) or 0,
-        }
+    to_keep = set()
+    kept_markers: dict = {
+        "hour": set(),
+        "day": set(),
+        "week": set(),
+        "month": set(),
+        "quarter": set(),
+        "halfyear": set(),
+        "year": set(),
+    }
+    period_limits = {
+        "hour": schedule.get("hourly", 0) or 0,
+        "day": schedule.get("daily", 0) or 0,
+        "week": schedule.get("weekly", 0) or 0,
+        "month": schedule.get("monthly", 0) or 0,
+        "quarter": schedule.get("quarterly", 0) or 0,
+        "halfyear": schedule.get("halfyearly", 0) or 0,
+        "year": schedule.get("yearly", 0) or 0,
+    }
 
-        # Always keep the newest backup
-        newest_backup = backups[0]
-        newest_backup_tuple = tuple(
-            newest_backup.items()
-        )  # Use tuple for set compatibility
-        to_keep.add(newest_backup_tuple)
-        latest_path = os.path.basename(newest_backup["path"])
-        print(f"Always keeping the newest backup: {latest_path} ({newest_backup['time']})")
+    # Always keep the newest backup
+    newest_backup = backups[0]
+    newest_backup_tuple = tuple(
+        newest_backup.items()
+    )  # Use tuple for set compatibility
+    to_keep.add(newest_backup_tuple)
+    latest_path = os.path.basename(newest_backup["path"])
+    print(f"Always keeping the newest backup: {latest_path} ({newest_backup['time']})")
 
-        # Update markers based on the newest backup
-        for period_tuple in kept_markers.items():
-            period = period_tuple[0]
-            if period_limits[period] > 0:
-                period_start = get_period_start(newest_backup["time"], period)
-                kept_markers[period].add(period_start)
-        # print(kept_markers)
+    # Update markers with the newest (latest) backup
+    for period_tuple in kept_markers.items():
+        period = period_tuple[0]
+        if period_limits[period] > 0:
+            period_start = get_period_start(newest_backup["time"], period)
+            kept_markers[period].add(period_start)
 
-        # Iterate through the rest of the backups (newest to oldest)
-        for backup in backups[1:]:
-            backup_time = backup["time"]
-            backup_tuple = tuple(backup.items())  # Use tuple for set compatibility
+    # Iterate through the rest of the backups (newest to oldest)
+    for backup in backups[1:]:
+        backup_time = backup["time"]
+        backup_tuple = tuple(backup.items())  # Use tuple for set compatibility
 
-            # Check against each period rule
-            for period, limit in period_limits.items():
-                if limit > 0:
-                    period_start = get_period_start(backup_time, period)
-                    # Check if we still need backups for this period type
-                    # AND if this backup falls into a period slot we haven't kept yet
-                    if (
-                        len(kept_markers[period]) < limit
-                        and period_start not in kept_markers[period]
-                    ):
-                        to_keep.add(backup_tuple)
-                        kept_markers[period].add(period_start)
-                        # print(f"  - Keeping {os.path.basename(backup['path'])} for {period} rule ({len(kept_markers[period])}/{limit})")
-                        # No need to check shorter periods if a longer one keeps it
-                        # break # Removed break: A backup might satisfy multiple rules, let it fill slots if needed
-            # print(kept_markers)
+        # Check against each period rule
+        for period, limit in period_limits.items():
+            if limit > 0:
+                period_start = get_period_start(backup_time, period)
+                # Check if we still need backups for this period type
+                # AND if this backup falls into a period slot we haven't kept yet
+                if (
+                    len(kept_markers[period]) < limit
+                    and period_start not in kept_markers[period]
+                ):
+                    to_keep.add(backup_tuple)
+                    kept_markers[period].add(period_start)
+                    
+                    # Debug each kept record:
+                    #print(f"  - Keeping {os.path.basename(backup['path'])} for {period} rule ({len(kept_markers[period])}/{limit})")
+                    
+                    # No need to check shorter periods if a longer one keeps it
+                    # break # Removed break: A backup might satisfy multiple rules, let it fill slots if needed
+    # Debug display periods covered:
+    #print_markers(kept_markers)
 
-        print(f"\nTotal backups to keep based on schedule: {len(to_keep)}")
-        # Convert back from tuples to dicts for easier use later if needed
-        kept_dicts = [dict(item) for item in to_keep]
-        return kept_dicts
+    print(f"\nTotal backups to keep based on schedule: {len(to_keep)}")
+    # Convert back from tuples to dicts for easier use later if needed
+    kept_dicts = [dict(item) for item in to_keep]
+    return kept_dicts
 
 
 def parse_filenames(
@@ -175,13 +189,14 @@ def parse_filenames(
 
 
 def parse_backup_files(backup_dir, pattern, time_format) -> list[dict] | None:
-    """
+    '''
     Scans the directory, parses filenames,
     and returns a sorted list of {path, datetime}
-    """
+    '''
     print(f"Scanning directory: {backup_dir}")
     try:
-        all_filenames: list[str] = os.listdir(backup_dir)
+        # Allow setting this from outside, to skip reading actual files from the directory.
+        all_filenames: list[str] = FILENAMES if FILENAMES is not None else os.listdir(backup_dir)
         backups = parse_filenames(all_filenames, backup_dir, pattern, time_format)
     except FileNotFoundError:
         print(f"Error: Backup directory not found: {backup_dir}")
@@ -196,7 +211,7 @@ def parse_backup_files(backup_dir, pattern, time_format) -> list[dict] | None:
     return backups
 
 
-def create_arg_parser():
+def parse_arguments():
     """
     Create argument parser for terminal parameters.
     """
@@ -264,17 +279,17 @@ def create_arg_parser():
         help="Actually delete the files. Default is dry run.",
     )
 
+    # this is a hack so that the app doesn't crash when debugging tests.
+    parser.add_argument('--rootdir', default='')
+    parser.add_argument('--capture', default='')
+
     args = parser.parse_args()
     return args
 
 
-def main():
-    """
-    Entry point.
-    """
-    args = create_arg_parser()
-
-    schedule = {
+def create_schedule(args):
+    ''' Generates the schedule object from arguments '''
+    return {
         "hourly": args.hourly,
         "daily": args.daily,
         "weekly": args.weekly,
@@ -284,7 +299,16 @@ def main():
         "yearly": args.yearly,
     }
 
-    # Get all matching backup files, sorted newest first
+
+def main():
+    '''
+    Entry point.
+    '''
+    args = parse_arguments()
+
+    schedule = create_schedule(args)
+
+    # Get all matching backup files, sorted newest first.
     all_backups = parse_backup_files(args.backup_dir, args.pattern, args.time_format)
 
     if all_backups is None:
@@ -295,8 +319,7 @@ def main():
         return
 
     # Determine which backups to keep based on the policy
-    policy = Policy()
-    backups_to_keep = policy.apply_retention_policy(all_backups, schedule)
+    backups_to_keep = apply_retention_policy(all_backups, schedule)
     paths_to_keep = {b["path"] for b in backups_to_keep}
     all_backup_paths = {b["path"] for b in all_backups}
 
