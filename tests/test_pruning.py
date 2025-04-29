@@ -32,8 +32,10 @@ def test_retention():
         'db_20160428_180000.sqlite3.xz',
         'db_20161028_180000.sqlite3.xz',
         'db_20170428_180000.sqlite3.xz',
+        'db_20170828_180000.sqlite3.xz',
         'db_20171028_180000.sqlite3.xz',
         'db_20180428_180000.sqlite3.xz',
+        'db_20180828_180000.sqlite3.xz',
         'db_20181028_180000.sqlite3.xz',
         'db_20190428_180000.sqlite3.xz', # <=
         'db_20191028_180000.sqlite3.xz',
@@ -48,9 +50,13 @@ def test_retention():
         'db_20240128_180000.sqlite3.xz', #
         'db_20240428_180000.sqlite3.xz', # 1 year
         'db_20241028_180000.sqlite3.xz', # 6 months
+        'db_20250108_180000.sqlite3.xz',
+        'db_20250118_180000.sqlite3.xz',
         'db_20250128_180000.sqlite3.xz', # 3 months
         'db_20250228_180000.sqlite3.xz',
         'db_20250328_180000.sqlite3.xz',
+        'db_20250401_180000.sqlite3.xz',
+        'db_20250415_180000.sqlite3.xz',
         'db_20250427_180000.sqlite3.xz',
         'db_20250428_180000.sqlite3.xz'
     ]
@@ -85,7 +91,7 @@ def test_retention():
     ]
 
     print(f'to prune: {sorted(times_to_prune, reverse=True)}')
-    print(f'to keep: {sorted(times_to_keep, reverse=True)}')
+    # print(f'to keep: {sorted(times_to_keep, reverse=True)}')
 
     # assert times_to_keep == set(expected_to_keep)
     assert times_to_prune == set(expected_to_remove)

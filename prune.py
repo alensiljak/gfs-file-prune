@@ -34,8 +34,8 @@ TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 # that have backups. It does NOT mean keeping 7 backups from the last 24 hours * 7 days.
 # Set a value to 0 or None to disable keeping backups for that period type.
 
-KEEP_HOURLY = 5  # Keep the last N hourly backups
-KEEP_DAILY = 30  # Keep the last N daily backups
+KEEP_HOURLY = 6  # Keep the last N hourly backups
+KEEP_DAILY = 45  # Keep the last N daily backups
 KEEP_WEEKLY = 50  # Keep the last N weekly backups
 KEEP_MONTHLY = 24  # Keep the last N monthly backups
 KEEP_QUARTERLY = 12  # Keep the last N quarterly backups (4 per year * 2 years)
@@ -74,10 +74,10 @@ def get_period_start(dt, period):
         raise ValueError(f"Unknown period: {period}")
 
 
-def print_markers(markers):
+def print_markers(markers: dict, limits: dict):
     ''' Display markers in a readable format '''
     for key in markers:
-        print(f"{key} ({len(markers[key])}):")
+        print(f"{key} ({len(markers[key])}/{limits[key]}):")
         for item in sorted(markers[key]):
             print(item)
 
@@ -151,7 +151,7 @@ def apply_retention_policy(backups, schedule) -> set | list[dict]:
                     # No need to check shorter periods if a longer one keeps it
                     # break # Removed break: A backup might satisfy multiple rules, let it fill slots if needed
     # Debug display periods covered:
-    #print_markers(kept_markers)
+    print_markers(kept_markers, period_limits)
 
     print(f"\nTotal backups to keep based on schedule: {len(to_keep)}")
     # Convert back from tuples to dicts for easier use later if needed
