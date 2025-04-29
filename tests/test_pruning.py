@@ -82,3 +82,16 @@ def test_retention():
 
     # assert times_to_keep == set(expected_to_keep)
     assert times_to_prune == set(expected_to_remove)
+
+def real_case_test_1():
+    '''
+        Debug/test a real case scenario.
+    '''
+    filenames = [
+        'db_20250428_102932.sqlite3.xz',
+        'db_20250428_160002.sqlite3.xz',
+        'db_20250428_215619.sqlite3.xz',
+        'db_20250429_100002.sqlite3.xz',
+        'db_20250429_160003.sqlite3.xz'
+    ]
+    filenames.sort(reverse=True)

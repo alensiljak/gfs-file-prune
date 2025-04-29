@@ -69,6 +69,81 @@ def get_period_start(dt, period):
 
 # --- Main Logic ---
 
+class Policy:
+    '''
+    Encapsulates retention policy.
+    '''
+    def apply_retention_policy(self, backups, schedule) -> set | list[dict]:
+        '''
+        Applies the retention policy and returns a set of backup dicts to keep.
+        '''
+        if not backups:
+            return set()
+
+        to_keep = set()
+        kept_markers: dict = {
+            "hour": set(),
+            "day": set(),
+            "week": set(),
+            "month": set(),
+            "quarter": set(),
+            "halfyear": set(),
+            "year": set(),
+        }
+        period_limits = {
+            "hour": schedule.get("hourly", 0) or 0,
+            "day": schedule.get("daily", 0) or 0,
+            "week": schedule.get("weekly", 0) or 0,
+            "month": schedule.get("monthly", 0) or 0,
+            "quarter": schedule.get("quarterly", 0) or 0,
+            "halfyear": schedule.get("halfyearly", 0) or 0,
+            "year": schedule.get("yearly", 0) or 0,
+        }
+
+        # Always keep the newest backup
+        newest_backup = backups[0]
+        newest_backup_tuple = tuple(
+            newest_backup.items()
+        )  # Use tuple for set compatibility
+        to_keep.add(newest_backup_tuple)
+        latest_path = os.path.basename(newest_backup["path"])
+        print(f"Always keeping the newest backup: {latest_path} ({newest_backup['time']})")
+
+        # Update markers based on the newest backup
+        for period_tuple in kept_markers.items():
+            period = period_tuple[0]
+            if period_limits[period] > 0:
+                period_start = get_period_start(newest_backup["time"], period)
+                kept_markers[period].add(period_start)
+        # print(kept_markers)
+
+        # Iterate through the rest of the backups (newest to oldest)
+        for backup in backups[1:]:
+            backup_time = backup["time"]
+            backup_tuple = tuple(backup.items())  # Use tuple for set compatibility
+
+            # Check against each period rule
+            for period, limit in period_limits.items():
+                if limit > 0:
+                    period_start = get_period_start(backup_time, period)
+                    # Check if we still need backups for this period type
+                    # AND if this backup falls into a period slot we haven't kept yet
+                    if (
+                        len(kept_markers[period]) < limit
+                        and period_start not in kept_markers[period]
+                    ):
+                        to_keep.add(backup_tuple)
+                        kept_markers[period].add(period_start)
+                        # print(f"  - Keeping {os.path.basename(backup['path'])} for {period} rule ({len(kept_markers[period])}/{limit})")
+                        # No need to check shorter periods if a longer one keeps it
+                        # break # Removed break: A backup might satisfy multiple rules, let it fill slots if needed
+            # print(kept_markers)
+
+        print(f"\nTotal backups to keep based on schedule: {len(to_keep)}")
+        # Convert back from tuples to dicts for easier use later if needed
+        kept_dicts = [dict(item) for item in to_keep]
+        return kept_dicts
+
 
 def parse_filenames(
     all_filenames: list[str], backup_dir, pattern: str, time_format: str
@@ -119,78 +194,6 @@ def parse_backup_files(backup_dir, pattern, time_format) -> list[dict] | None:
     backups.sort(key=lambda x: x["time"], reverse=True)
     print(f"Found {len(backups)} backup files matching the pattern.")
     return backups
-
-
-def apply_retention_policy(backups, schedule) -> set | list[dict]:
-    """
-    Applies the retention policy and returns a set of backup dicts to keep.
-    """
-    if not backups:
-        return set()
-
-    to_keep = set()
-    kept_markers: dict = {
-        "hour": set(),
-        "day": set(),
-        "week": set(),
-        "month": set(),
-        "quarter": set(),
-        "halfyear": set(),
-        "year": set(),
-    }
-    period_limits = {
-        "hour": schedule.get("hourly", 0) or 0,
-        "day": schedule.get("daily", 0) or 0,
-        "week": schedule.get("weekly", 0) or 0,
-        "month": schedule.get("monthly", 0) or 0,
-        "quarter": schedule.get("quarterly", 0) or 0,
-        "halfyear": schedule.get("halfyearly", 0) or 0,
-        "year": schedule.get("yearly", 0) or 0,
-    }
-
-    # Always keep the newest backup
-    newest_backup = backups[0]
-    newest_backup_tuple = tuple(
-        newest_backup.items()
-    )  # Use tuple for set compatibility
-    to_keep.add(newest_backup_tuple)
-    latest_path = os.path.basename(newest_backup["path"])
-    print(f"Always keeping the newest backup: {latest_path} ({newest_backup['time']})")
-
-    # Update markers based on the newest backup
-    for period_tuple in kept_markers.items():
-        period = period_tuple[0]
-        if period_limits[period] > 0:
-            period_start = get_period_start(newest_backup["time"], period)
-            kept_markers[period].add(period_start)
-    # print(kept_markers)
-
-    # Iterate through the rest of the backups (newest to oldest)
-    for backup in backups[1:]:
-        backup_time = backup["time"]
-        backup_tuple = tuple(backup.items())  # Use tuple for set compatibility
-
-        # Check against each period rule
-        for period, limit in period_limits.items():
-            if limit > 0:
-                period_start = get_period_start(backup_time, period)
-                # Check if we still need backups for this period type
-                # AND if this backup falls into a period slot we haven't kept yet
-                if (
-                    len(kept_markers[period]) < limit
-                    and period_start not in kept_markers[period]
-                ):
-                    to_keep.add(backup_tuple)
-                    kept_markers[period].add(period_start)
-                    # print(f"  - Keeping {os.path.basename(backup['path'])} for {period} rule ({len(kept_markers[period])}/{limit})")
-                    # No need to check shorter periods if a longer one keeps it
-                    # break # Removed break: A backup might satisfy multiple rules, let it fill slots if needed
-        # print(kept_markers)
-
-    print(f"\nTotal backups to keep based on schedule: {len(to_keep)}")
-    # Convert back from tuples to dicts for easier use later if needed
-    kept_dicts = [dict(item) for item in to_keep]
-    return kept_dicts
 
 
 def create_arg_parser():
@@ -292,7 +295,8 @@ def main():
         return
 
     # Determine which backups to keep based on the policy
-    backups_to_keep = apply_retention_policy(all_backups, schedule)
+    policy = Policy()
+    backups_to_keep = policy.apply_retention_policy(all_backups, schedule)
     paths_to_keep = {b["path"] for b in backups_to_keep}
     all_backup_paths = {b["path"] for b in all_backups}
 
