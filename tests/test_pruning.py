@@ -62,7 +62,8 @@ def test_retention():
     }
     all_backups = prune.parse_filenames(filenames, '', prune.FILENAME_PATTERN,
                                         prune.TIMESTAMP_FORMAT)
-    backups_to_keep = prune.apply_retention_policy(all_backups, schedule)
+    policy = prune.Policy()
+    backups_to_keep = policy.apply_retention_policy(all_backups, schedule)
 
     all_times = {b['time'].strftime(ISO_FORMAT) for b in all_backups}
     times_to_keep = {b['time'].strftime(ISO_FORMAT) for b in backups_to_keep}
