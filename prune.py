@@ -151,7 +151,7 @@ def apply_retention_policy(backups, schedule) -> set | list[dict]:
                     # No need to check shorter periods if a longer one keeps it
                     # break # Removed break: A backup might satisfy multiple rules, let it fill slots if needed
     # Debug display periods covered:
-    print_markers(kept_markers, period_limits)
+    #print_markers(kept_markers, period_limits)
 
     print(f"\nTotal backups to keep based on schedule: {len(to_keep)}")
     # Convert back from tuples to dicts for easier use later if needed
